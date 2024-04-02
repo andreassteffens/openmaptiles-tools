@@ -59,6 +59,22 @@ else
   : "${TILESET_MAX_ZOOM:=${TILESET_MAX_ZOOM:-$(grep -Poh '(?<=maxzoom:)[^\n]+' < "$TILESET_FILE" |xargs)}}"
 fi
 
+if [[ -n "${AT_REGION:-}" ]]; then
+  echo "Using [a]tapa region extension"
+
+  REGION_HASH=$( printf '%s' "$AT_REGION" | md5sum | /bin/cut -f1 -d" " )
+  PYTHON_PATH=$( cd "$(dirname "${BASH_SOURCE[0]}")" ; cd .. ; pwd -P )
+  SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+
+  FUNC_ZXY=$( printf 'getmvt_%s' "$REGION_HASH" )
+
+  FUNCTION_SQL=$( PYTHONPATH=${PYTHON_PATH} python3 ${SCRIPT_DIR}/generate-sqltomvt ${TILESET_FILE} --fname="getmvt_${REGION_HASH}" --key --gzip --postgis-ver 3.2.3 --function --at_region="$AT_REGION" )
+
+  psql \
+        -v ON_ERROR_STOP="1" \
+        -c "$FUNCTION_SQL"
+fi
+
 PGQUERY="pgquery://\
 ?database=${PGDATABASE}\
 &host=${PGHOSTS}\
@@ -115,6 +131,12 @@ else
     run_tilelive_copy --scheme=list "--list=$LIST_FILE" --timeout="${TIMEOUT:-180000}"
   done
 
+fi
+
+if [[ -n "${AT_REGION:-}" ]]; then
+  psql \
+       -v ON_ERROR_STOP="1" \
+       -c "DROP FUNCTION IF EXISTS $FUNC_ZXY"
 fi
 
 echo "$(date '+%Y-%m-%d %H-%M-%S') Tile generation complete!"

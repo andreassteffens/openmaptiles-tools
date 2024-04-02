@@ -22,7 +22,8 @@ class MvtGenerator:
                  layer_ids: List[str] = None, exclude_layers=False,
                  key_column=False, gzip: Union[int, bool] = False,
                  use_feature_id: bool = None, test_geometry=False,
-                 order_layers: bool = False, extent=4096):
+                 order_layers: bool = False, extent=4096,
+                 at_region_wkt: str = None):
         if isinstance(tileset, str):
             self.tileset = Tileset.parse(tileset)
         else:
@@ -38,6 +39,7 @@ class MvtGenerator:
         self.zoom = zoom
         self.x = x
         self.y = y
+        self.at_region_wkt = at_region_wkt
 
         # extract the actual version number
         # ...POSTGIS='2.4.8 r17696'...
@@ -191,11 +193,13 @@ as mvtl{extras} FROM {query}"""
                        mvt_geometry_wrapper: Callable[[str], str] = None,
                        extra_columns: str = None) -> str:
         query = layer.query
+        
         if self.zoom is None:
             return query
 
         bbox = self.tile_to_bbox(layer, self.zoom, self.x, self.y)
-        query = self.substitute_sql(query, self.zoom, bbox)
+        query = self.substitute_sql(query, self.zoom, bbox, layer.at_region_intersection_max_zoom)
+        
         tile_buffer_size = int(self.extent * layer.buffer_size / self.pixel_width)
         replacement = ''
         if to_mvt_geometry:
@@ -214,11 +218,11 @@ as mvtl{extras} FROM {query}"""
             replacement += extra_columns
 
         if replacement:
-            q = query.replace(layer.geometry_field, replacement)
-            if len(q) - len(replacement) + len(layer.geometry_field) != len(query):
-                raise ValueError(
-                    f"Unable to replace '{layer.geometry_field}' in {layer.id} layer, "
-                    f'expected a single geometry field in the layer query definition')
+            q = query.replace(layer.geometry_field, replacement, 1)
+            #if len(q) - len(replacement) + len(layer.geometry_field) != len(query):
+            #    raise ValueError(
+            #        f"Unable to replace '{layer.geometry_field}' in {layer.id} layer, "
+            #        f'expected a single geometry field in the layer query definition')
             query = q
 
         return query
@@ -241,16 +245,24 @@ as mvtl{extras} FROM {query}"""
         margin_str = '' if margin is None else f', {margin}'
         return f'{self.tile_envelope}({zoom}, {x}, {y}{margin_str})'
 
-    def substitute_sql(self, query, zoom, bbox):
+    def substitute_sql(self, query, zoom, bbox, region_max_zoom=None):
         zero_tile_width_res = 40075016.6855785 / self.pixel_width
         zero_tile_height_res = 40075016.6855785 / self.pixel_height
         zoom_pixel_width = f'{zero_tile_width_res}/2^{zoom}::NUMERIC'
         zoom_pixel_height = f'{zero_tile_height_res}/2^{zoom}::NUMERIC'
+        
+        region_restriction = ''
+        if self.at_region_wkt is not None:
+            zoom_restriction = '' if region_max_zoom is None else f'zoom <= {region_max_zoom} OR '
+            region_restriction = f""" WHERE {zoom_restriction}ST_Intersects(ST_MakeValid(geometry), ST_GeomFromText('{self.at_region_wkt}', 3857))"""
+        
         query = (query
                  .replace('!bbox!', bbox)
                  .replace('z(!scale_denominator!)', str(zoom))
                  .replace('!pixel_width!', zoom_pixel_width)
-                 .replace('!pixel_height!', zoom_pixel_height))
+                 .replace('!pixel_height!', zoom_pixel_height)
+                 .replace('!at_region_restriction!', region_restriction))
+                 
         if '!scale_denominator!' in query:
             raise ValueError(
                 'MVT made an invalid assumption that "!scale_denominator!" is '

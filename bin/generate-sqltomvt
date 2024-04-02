@@ -8,7 +8,7 @@ Usage:
                     [--function | --prepared | --query | --psql | --raw]
                     [--layer=<layer>]... [--exclude-layers] [--key]
                     [--gzip [<gzlevel>]] [--no-feature-ids]
-                    [--test-geometry] [--extent=<extent>]
+                    [--test-geometry] [--extent=<extent>] [--at_region=<wkt>]
   generate-sqltomvt --help
   generate-sqltomvt --version
 
@@ -31,6 +31,7 @@ Options:
   --no-feature-ids      Disable feature ID generation, e.g. from osm_id.
                         You must use this flag when generating SQL for PostGIS before v3
   -g --test-geometry    Validate all geometries produced by ST_AsMvtGeom(), and warn.
+  --at_region=<wkt>     Region restriction as WKT to be applied on export
   --extent=<extent>     MVT tile extent [default: 4096].
   --help                Show this screen.
   --version             Show version.
@@ -52,6 +53,10 @@ if __name__ == '__main__':
 
     extent = int(args['--extent']) if args['--extent'] is not None else 4096
 
+    at_region = None
+    if args['--at_region']:
+        at_region = args['--at_region']
+
     mvt = MvtGenerator(
         tileset=args['<tileset>'],
         postgis_ver=args['--postgis-ver'],
@@ -63,6 +68,7 @@ if __name__ == '__main__':
         use_feature_id=False if args['--no-feature-ids'] else None,
         test_geometry=args['--test-geometry'],
         extent=extent,
+        at_region_wkt=at_region
     )
 
     if args['--prepared']:

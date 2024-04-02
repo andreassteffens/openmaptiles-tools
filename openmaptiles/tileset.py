@@ -278,6 +278,10 @@ class Layer:
         return size
 
     @property
+    def at_region_intersection_max_zoom(self) -> int:
+        return self.definition['layer'].get('at_region_intersection_max_zoom')
+
+    @property
     def max_size(self) -> int:
         return self.definition.get('max_size', 512)
 
