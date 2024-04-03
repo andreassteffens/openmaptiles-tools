@@ -105,7 +105,7 @@ if [[ -n "${LIST_FILE-}" ]]; then
 
   # Generate all tiles given in a file LIST_FILE.
   echo "$(date '+%Y-%m-%d %H-%M-%S') Generating tiles from a list $LIST_FILE from $HOST_COUNT servers, using $MAX_HOST_CONNECTIONS connections per server, $ALL_STREAMS streams"
-  run_tilelive_copy --scheme=list --list="$LIST_FILE" --timeout="${TIMEOUT:-1800000}"
+  run_tilelive_copy --scheme=list --list="$LIST_FILE" --bounds="$BBOX" --minzoom="$MIN_ZOOM" --maxzoom="$MAX_ZOOM" --timeout="${TIMEOUT:-1800000}"
 
 elif [[ -z "${MID_ZOOM-}" ]]; then
 
